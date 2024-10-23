@@ -8,8 +8,10 @@ import com.yufenghui.shorturl.common.Response;
 import com.yufenghui.shorturl.common.ShortUrlResponse;
 import com.yufenghui.shorturl.mapper.UrlMapMapper;
 import com.yufenghui.shorturl.model.UrlMap;
+import com.yufenghui.shorturl.service.ShortUrlService;
 import com.yufenghui.shorturl.util.HashUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 public class ShortUrlController {
 
     private static final String REDIS_CACHE_KEY_PREFIX = "su:";
+    private static final String REDIS_LOCK_KEY_PREFIX = "su:gen-lock";
 
     @Value("${app.base-url:}")
     private String baseUrl;
@@ -42,8 +45,15 @@ public class ShortUrlController {
     @Autowired
     private UrlMapMapper urlMapMapper;
 
+    @Autowired
+    private ShortUrlService shortUrlService;
+
+
     /**
      * 根据原始URL生成短链
+     * <p>
+     * 采用 select for update where 不存在的记录，会导致表锁，和分布式锁作用一样。
+     * 同样不影响查询，但性能会比分布式锁好一些。
      *
      * @param originUrl
      * @return
@@ -56,28 +66,9 @@ public class ShortUrlController {
             throw new IllegalArgumentException("originUrl不能为空");
         }
 
-        // 判断是否已经生成短链，是否需要Bloom Filter？
-        LambdaQueryWrapper<UrlMap> queryWrapper = Wrappers.lambdaQuery(UrlMap.class)
-                .eq(UrlMap::getOriginUrl, originUrl);
-
-        UrlMap existUrlMap = urlMapMapper.selectOne(queryWrapper);
-        if (existUrlMap != null && StrUtil.isNotBlank(existUrlMap.getShortUrl())) {
-            log.info("短链已存在，short-url={}, origin-url={}", existUrlMap.getShortUrl(), existUrlMap.getOriginUrl());
-            return Response.succeed(ShortUrlResponse.builder().shortUrl(existUrlMap.getShortUrl()).build());
-        }
-
-        // 如果没有生成，生成短链
-        String code = HashUtil.hashToBase62(originUrl + RandomUtil.randomString(10));
-        // DB存储短链
-        UrlMap urlMap = UrlMap.builder()
-                .code(code)
-                .shortUrl(baseUrl + code)
-                .originUrl(originUrl)
-                .createTime(LocalDateTime.now())
-                .build();
-
+        String code = null;
         try {
-            urlMapMapper.insert(urlMap);
+            code = shortUrlService.create(originUrl);
         } catch (DuplicateKeyException e) {
             // 说明短链冲突，需要重新生成短链，然后再存储，此处直接抛出
             log.info("短链生成冲突，origin-url={}", originUrl);
@@ -86,6 +77,77 @@ public class ShortUrlController {
 
         // 保存Redis缓存
         saveCache(code, originUrl);
+
+        return Response.succeed(ShortUrlResponse.builder().shortUrl(baseUrl + code).build());
+    }
+
+    /**
+     * 根据原始URL生成短链
+     *
+     * @param originUrl
+     * @return
+     */
+    @ResponseBody
+    @RequestMapping(value = "/genWithLock", method = {RequestMethod.GET, RequestMethod.POST})
+    public Response<ShortUrlResponse> genWithLock(String originUrl) {
+        // 参数校验
+        if (StrUtil.isBlank(originUrl)) {
+            throw new IllegalArgumentException("originUrl不能为空");
+        }
+
+        String code = null;
+
+        // 需要分布式锁，否则短链会重复
+        RLock lock = null;
+        try {
+            lock = redissonClient.getLock(REDIS_LOCK_KEY_PREFIX);
+            if (lock.tryLock(200, -1, TimeUnit.MILLISECONDS)) {
+
+                // 判断是否已经生成短链，是否需要Bloom Filter？
+                // 数据库校验
+                LambdaQueryWrapper<UrlMap> queryWrapper = Wrappers.lambdaQuery(UrlMap.class)
+                        .eq(UrlMap::getOriginUrl, originUrl);
+
+                UrlMap existUrlMap = urlMapMapper.selectOne(queryWrapper);
+                if (existUrlMap != null && StrUtil.isNotBlank(existUrlMap.getShortUrl())) {
+                    log.info("短链已存在，short-url={}, origin-url={}", existUrlMap.getShortUrl(), existUrlMap.getOriginUrl());
+                    return Response.succeed(ShortUrlResponse.builder().shortUrl(existUrlMap.getShortUrl()).build());
+                }
+
+                // 如果没有生成，生成短链
+                code = HashUtil.hashToBase62(originUrl + RandomUtil.randomString(10));
+                // DB存储短链
+                UrlMap urlMap = UrlMap.builder()
+                        .code(code)
+                        .shortUrl(baseUrl + code)
+                        .originUrl(originUrl)
+                        .createTime(LocalDateTime.now())
+                        .build();
+
+                try {
+                    urlMapMapper.insert(urlMap);
+                } catch (DuplicateKeyException e) {
+                    // 说明短链冲突，需要重新生成短链，然后再存储，此处直接抛出
+                    log.info("短链生成冲突，origin-url={}", originUrl);
+                    return Response.fail("短链生成冲突，请重试一下");
+                }
+
+                // 保存Redis缓存
+                saveCache(code, originUrl);
+            } else {
+                //获取锁异常，直接返回
+                log.info("Redisson Lock Failed.");
+            }
+
+        } catch (Exception e) {
+            //异常
+            log.error("Redisson Lock Error: ", e);
+        } finally {
+            //释放锁,lock.isHeldByCurrentThread()防止将其它线程锁释放
+            if (null != lock && lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
 
         return Response.succeed(ShortUrlResponse.builder().shortUrl(baseUrl + code).build());
     }

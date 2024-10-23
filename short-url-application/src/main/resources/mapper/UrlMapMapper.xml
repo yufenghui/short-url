@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.yufenghui.shorturl.mapper.UrlMapMapper">
+
+    <resultMap id="urlMap" type="com.yufenghui.shorturl.model.UrlMap">
+        <id property="id" column="id"/>
+        <result property="code" column="code"/>
+        <result property="shortUrl" column="short_url"/>
+        <result property="originUrl" column="origin_url"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <select id="selectForUpdate" resultMap="urlMap">
+        select *
+        from url_map
+        where origin_url = #{originUrl} for
+        update
+    </select>
+
+</mapper>

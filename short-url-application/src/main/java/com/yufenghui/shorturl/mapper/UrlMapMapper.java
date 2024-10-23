@@ -3,6 +3,7 @@ package com.yufenghui.shorturl.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.yufenghui.shorturl.model.UrlMap;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 /**
  * UrlMapMapper
@@ -12,4 +13,7 @@ import org.apache.ibatis.annotations.Mapper;
  */
 @Mapper
 public interface UrlMapMapper extends BaseMapper<UrlMap> {
+
+    UrlMap selectForUpdate(@Param("originUrl") String originUrl);
+
 }
