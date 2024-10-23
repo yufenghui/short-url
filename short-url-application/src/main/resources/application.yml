@@ -1,0 +1,59 @@
+server:
+  port: 8080
+  tomcat: # https://blog.csdn.net/myyhtw/article/details/129069586
+    accept-count: 100
+    max-connections: 8192
+    threads:
+      max: 200
+      min-spare: 10
+
+app:
+  base-url: http://localhost:8080/
+
+spring:
+  application:
+    name: short-url-application
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/demo?useSSL=false&useUnicode=true&characterEncoding=UTF-8
+    username: root
+    password: root
+    hikari:
+      # 最小空闲线程数量
+      minimum-idle: 10
+      # 最大连接池数量
+      maximum-pool-size: 20
+      # 空闲连接超时时间，默认值600000（10分钟），大于等于max-lifetime且max-lifetime>0，会被重置为0；不等于0且小于10秒，会被重置为10秒。
+      idle-timeout: 180000
+      # 连接最大存活时间，不等于0且小于30秒，会被重置为默认值30分钟.设置应该比mysql设置（8小时）的超时时间短
+      max-lifetime: 3600000
+      # 连接超时时间：毫秒，小于250毫秒，否则被重置为默认值30秒
+      connection-timeout: 30000
+      # # 校验超时时间
+      validation-timeout: 3000
+  redis:
+    redisson:
+      config: |
+        singleServerConfig:
+          # 地址
+          address: redis://${REDIS_HOST:127.0.0.1}:${REDIS_PORT:6379}
+          # 密码
+          password: redis
+          # 数据库
+          database: 0
+          # 最小保持连接数（长连接）。长期保持一定数量的连接有利于提高瞬时写入反应速度。
+          connectionMinimumIdleSize: 5
+          # 连接池大小
+          connectionPoolSize: 20
+          # 连接超时时间
+          connectTimeout: 500
+          # 超时时间
+          timeout: 100
+          # 重试次数
+          retryAttempts: 1
+          # 重试间隔
+          retryInterval: 100
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
