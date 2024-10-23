@@ -23,6 +23,16 @@
 - 短链生成后，存入数据库中，会立即在缓存中存一份
 - 查询不存在，从数据库中获取后，会刷新缓存
 
+## 构建
+
+```shell
+docker build -t short-url-application:v1.0 .
+```
+
+```shell
+docker run -it -p 8080:8080 short-url-application:v1.0
+```
+
 ## 问题
 
 #### 为什么不采用 Bloom Filter？

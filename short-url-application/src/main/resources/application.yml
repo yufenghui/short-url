@@ -15,7 +15,7 @@ spring:
     name: short-url-application
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/demo?useUnicode=true&characterEncoding=utf-8&rewriteBatchedStatements=true&autoReconnect=true&serverTimezone=Asia/Shanghai&useSSL=false
+    url: jdbc:mysql://192.168.0.106:3306/demo?useUnicode=true&characterEncoding=utf-8&rewriteBatchedStatements=true&autoReconnect=true&serverTimezone=Asia/Shanghai&useSSL=false
     username: root
     password: root
     hikari:
@@ -36,7 +36,7 @@ spring:
       config: |
         singleServerConfig:
           # 地址
-          address: redis://${REDIS_HOST:127.0.0.1}:${REDIS_PORT:6379}
+          address: redis://${REDIS_HOST:192.168.0.106}:${REDIS_PORT:6379}
           # 密码
           password: redis
           # 数据库
