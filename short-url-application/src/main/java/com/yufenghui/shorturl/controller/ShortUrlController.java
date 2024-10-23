@@ -15,9 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletResponse;
 import java.time.LocalDateTime;
@@ -51,7 +49,7 @@ public class ShortUrlController {
      * @return
      */
     @ResponseBody
-    @GetMapping("/gen")
+    @RequestMapping(value = "/gen", method = {RequestMethod.GET, RequestMethod.POST})
     public Response<ShortUrlResponse> gen(String originUrl) {
         // 参数校验
         if (StrUtil.isBlank(originUrl)) {
@@ -97,7 +95,7 @@ public class ShortUrlController {
      *
      * @param code
      */
-    @GetMapping("/{code:[0-9a-zA-Z]+$}")
+    @GetMapping("/a/{code}")
     public void toOrigin(@PathVariable("code") String code, HttpServletResponse response) {
         if (StrUtil.isBlank(code)) {
             throw new IllegalArgumentException("短链不能为空");
@@ -110,8 +108,8 @@ public class ShortUrlController {
         // 从Redis缓存中获取短链
         String originUrl = getCache(code);
 
+        // 如果不存在，从数据库中获取
         if (originUrl == null || StrUtil.isBlank(originUrl)) {
-            // 如果不存在，从数据库中获取
             LambdaQueryWrapper<UrlMap> queryWrapper = Wrappers.lambdaQuery(UrlMap.class)
                     .eq(UrlMap::getCode, code);
 
@@ -122,8 +120,6 @@ public class ShortUrlController {
                 // 刷新Redis缓存
                 saveCache(code, originUrl);
             }
-            // 如果数据库中也不存在，是否需要生成短链
-
         }
 
         // 跳转
@@ -159,6 +155,7 @@ public class ShortUrlController {
     private void saveCache(String code, String originUrl) {
         try {
             // 短链生成后存到Redis中，采用什么数据结构
+            // 过期时间可以给个随机范围
             redissonClient.getBucket(REDIS_CACHE_KEY_PREFIX + code).set(originUrl, 20, TimeUnit.SECONDS);
         } catch (Throwable t) {
             // 忽略，Redis异常不能影响使用

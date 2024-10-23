@@ -8,7 +8,7 @@ server:
       min-spare: 10
 
 app:
-  base-url: http://localhost:8080/
+  base-url: http://localhost:8080/a/
 
 spring:
   application:
