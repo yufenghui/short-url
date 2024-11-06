@@ -38,4 +38,4 @@ RUN apt-get update \
 # 添加应用jar
 COPY --from=builder $APP_PATH /app.jar
 
-CMD exec java $JAVA_OPTS -jar /app.jar
+CMD exec java -Djava.security.egd=file:/dev/./urandom $JAVA_OPTS -jar /app.jar
